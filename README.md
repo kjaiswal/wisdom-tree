@@ -2,6 +2,9 @@
 
 A fully local, offline-first voice assistant for macOS (Apple Silicon). Press the play/pause button on a Satechi remote to activate — no cloud, no subscription, no data leaves your machine.
 
+<img width="2752" height="1536" alt="wisdom-tree" src="https://github.com/user-attachments/assets/2494f650-8f6c-489f-a21e-453598962e48" />
+
+
 ## What it does
 
 Press a button → speak → get a spoken response. The full pipeline:
