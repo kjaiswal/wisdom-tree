@@ -1,0 +1,35 @@
+# Rust build artifacts
+target/
+Cargo.lock.bak
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Claude Code local settings
+.claude/
+
+# Wake word model files (large binaries — provide your own)
+models/
+*.onnx
+*.npz
+
+# Environment / secrets
+.env
+.env.local
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo

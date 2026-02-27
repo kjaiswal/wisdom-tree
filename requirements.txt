@@ -1,0 +1,15 @@
+# macOS / Apple Silicon — install into a venv:
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# PyAudio needs PortAudio:
+#   brew install portaudio
+#
+# openwakeword will download ONNX models on first run (~30 MB).
+# To pre-cache all bundled models:
+#   python3 -c "import openwakeword; openwakeword.utils.download_models()"
+
+openwakeword==0.6.0
+pyaudio==0.2.14
+numpy==1.26.4
+onnxruntime==1.18.1

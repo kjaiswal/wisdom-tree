@@ -1,0 +1,30 @@
+# Speech-to-Speech pipeline dependencies
+#
+# Install into the same venv as requirements.txt:
+#   pip install -r requirements_s2s.txt
+#
+# System prerequisites (macOS):
+#   brew install portaudio ffmpeg
+#
+# On first run, silero-VAD (~2 MB) is downloaded via torch.hub and cached.
+# On first run, Kokoro downloads its model weights (~350 MB) automatically.
+# faster-whisper downloads the chosen model on first use:
+#   medium.en ≈ 780 MB | large-v3 ≈ 1.5 GB
+
+# STT
+faster-whisper==1.1.0
+
+# LLM client (AnythingLLM HTTP API)
+requests>=2.31.0
+
+# TTS
+kokoro==0.7.16
+soundfile==0.12.1
+
+# Audio capture + VAD
+sounddevice==0.5.0
+torch==2.4.1          # silero-VAD runtime; also used by Kokoro
+torchaudio            # required by silero-VAD
+
+# Numerics
+numpy==1.26.4
