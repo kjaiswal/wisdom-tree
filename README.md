@@ -88,19 +88,35 @@ Use `--whisper-model large-v3` (~1.5 GB) for higher transcription accuracy.
 
 ## Configuration
 
-Set your AnythingLLM API key as an environment variable (get it from AnythingLLM → Settings → API Keys):
+The two required settings are your AnythingLLM API key and the URL of the machine running AnythingLLM. Both can be set as environment variables (add to `~/.zshrc` or `~/.bash_profile` to make permanent) or passed as flags at runtime.
+
+| Environment variable | Flag | Default | Description |
+|---|---|---|---|
+| `ANYTHINGLLM_API_KEY` | `--api-key` | _(empty)_ | API key from AnythingLLM → Settings → API Keys |
+| `ANYTHINGLLM_URL` | `--anythingllm-url` | `http://localhost:3001` | Base URL of your AnythingLLM instance |
+
+**Local machine (AnythingLLM running on the same computer):**
 
 ```bash
 export ANYTHINGLLM_API_KEY="your-api-key-here"
+./run_all.sh --workspace my-workspace
 ```
 
-You can add this to your shell profile (`~/.zshrc`, `~/.bash_profile`) to make it permanent.
-
-Alternatively, pass it directly at runtime:
+**Remote machine (AnythingLLM running on another machine on your network):**
 
 ```bash
-./run_all.sh --workspace my-workspace --api-key your-api-key-here
+export ANYTHINGLLM_API_KEY="your-api-key-here"
+export ANYTHINGLLM_URL="http://192.168.1.x:3001"
+./run_all.sh --workspace my-workspace
 ```
+
+Or pass everything inline:
+
+```bash
+./run_all.sh --workspace my-workspace --api-key your-key --anythingllm-url http://192.168.1.x:3001
+```
+
+> **Note:** When connecting to AnythingLLM on another machine, make sure it is bound to `0.0.0.0` (not just `localhost`) so it accepts connections from the network. Check AnythingLLM's server settings if requests are refused.
 
 ## Usage
 

@@ -339,8 +339,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="faster-whisper model name (default: medium.en)")
     p.add_argument("--voice",          default="af_sky",
                    help="Kokoro voice ID (default: af_sky)")
-    p.add_argument("--anythingllm-url", default="http://localhost:3001",
-                   help="AnythingLLM base URL (default: http://localhost:3001)")
+    p.add_argument("--anythingllm-url", default=os.environ.get("ANYTHINGLLM_URL", "http://localhost:3001"),
+                   help="AnythingLLM base URL. Can also be set via the ANYTHINGLLM_URL environment variable. "
+                        "(default: http://localhost:3001)")
     p.add_argument("--api-key",         default=os.environ.get("ANYTHINGLLM_API_KEY", ""),
                    help="AnythingLLM API key (from Settings → API Keys). "
                         "Can also be set via the ANYTHINGLLM_API_KEY environment variable.")

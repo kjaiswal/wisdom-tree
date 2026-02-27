@@ -37,11 +37,12 @@ S2S_ARGS=("$@")
 # ---------------------------------------------------------------------------
 # 1. Check AnythingLLM
 # ---------------------------------------------------------------------------
-_s2s "Checking AnythingLLM at localhost:3001 …"
-if curl -sf --max-time 3 http://localhost:3001/api/ping -o /dev/null; then
+ANYTHINGLLM_URL="${ANYTHINGLLM_URL:-http://localhost:3001}"
+_s2s "Checking AnythingLLM at ${ANYTHINGLLM_URL} …"
+if curl -sf --max-time 3 "${ANYTHINGLLM_URL}/api/ping" -o /dev/null; then
     _s2s "AnythingLLM: OK"
 else
-    _err "AnythingLLM not reachable at localhost:3001"
+    _err "AnythingLLM not reachable at ${ANYTHINGLLM_URL}"
     _err "Start AnythingLLM, then re-run this script."
     _err "(Continuing anyway — LLM calls will fail until it's up.)"
 fi
