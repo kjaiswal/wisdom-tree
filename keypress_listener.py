@@ -47,7 +47,8 @@ _NX_KEYSTATE_DOWN_MASK  = 0x0A00  # high byte of data1 flags when key is pressed
 _NS_SYSDEFINED_TYPE     = 14      # NSEventTypeSystemDefined
 
 # Regular key constants
-_KEYPAD_PLUS_KEYCODE    = 69      # kVK_ANSI_KeypadPlus
+_KEYPAD_PLUS_KEYCODE    = 69      # kVK_ANSI_KeypadPlus (Dell / extended keyboard)
+_EQUAL_KEYCODE          = 24      # kVK_ANSI_Equal — Shift+= gives '+' on Apple keyboard
 
 # ---------------------------------------------------------------------------
 # Socket state (accessed from the tap callback thread and main thread)
@@ -149,10 +150,12 @@ def _event_callback(proxy, event_type, event, _refcon):
 
         return event
 
-    # Regular keydown — keypad plus
+    # Regular keydown — keypad plus (Dell/extended) or Shift+= / '+' (Apple keyboard)
     if event_type == Quartz.kCGEventKeyDown:
         keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
-        if keycode == _KEYPAD_PLUS_KEYCODE:
+        flags   = Quartz.CGEventGetFlags(event)
+        shift   = bool(flags & Quartz.kCGEventFlagMaskShift)
+        if keycode == _KEYPAD_PLUS_KEYCODE or (keycode == _EQUAL_KEYCODE and shift):
             threading.Thread(target=_send_detection, daemon=True).start()
             return None   # ← consume
 
@@ -207,7 +210,7 @@ def _run_pynput_fallback() -> None:
     def on_press(key):
         if key == keyboard.Key.media_play_pause:
             _send_detection()
-        elif hasattr(key, 'vk') and key.vk == _KEYPAD_PLUS_KEYCODE:
+        elif hasattr(key, 'vk') and key.vk in (_KEYPAD_PLUS_KEYCODE, _EQUAL_KEYCODE):
             _send_detection()
 
     with keyboard.Listener(on_press=on_press) as listener:
