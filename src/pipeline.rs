@@ -33,10 +33,13 @@ pub async fn run_pipeline(
     backend: Option<String>,
     cancel: Arc<AtomicBool>,
     last_interaction: Arc<tokio::sync::Mutex<Option<std::time::Instant>>>,
+    last_backend: Arc<tokio::sync::Mutex<Option<String>>>,
 ) {
     // ── WAKE ─────────────────────────────────────────────────────────────────
     println!("{}", "🎯 [WAKE]    Button pressed!".yellow().bold());
     set_state(&state, AssistantState::Listening).await;
+
+    let backend_str = backend.as_deref().unwrap_or("anythingllm");
 
     // Check whether this is a fresh session (no interaction in the last 5 min).
     let needs_intro = {
@@ -46,10 +49,21 @@ pub async fn run_pipeline(
             Some(t) => t.elapsed() > Duration::from_secs(300),
         }
     };
-    {
-        let mut guard = last_interaction.lock().await;
-        *guard = Some(std::time::Instant::now());
-    }
+
+    // Check whether the user switched backends since the last interaction.
+    let backend_changed = if needs_intro {
+        false // full intro already covers the backend name
+    } else {
+        let guard = last_backend.lock().await;
+        match guard.as_deref() {
+            None => false,
+            Some(prev) => prev != backend_str,
+        }
+    };
+
+    // Update tracked state.
+    { *last_interaction.lock().await = Some(std::time::Instant::now()); }
+    { *last_backend.lock().await = Some(backend_str.to_string()); }
 
     // ── RECORD ───────────────────────────────────────────────────────────────
     // Spawn capture.py immediately in the background so Python's startup
@@ -59,10 +73,16 @@ pub async fn run_pipeline(
     let pr = preroll_b64.clone();
     let capture_task = tokio::spawn(async move { run_capture(pr.as_deref()).await });
 
-    // If this is a new session, play an intro while capture.py is loading.
+    // Play appropriate announcement while capture.py is loading.
     if needs_intro {
-        if let Ok(intro) = call_s2s_intro(backend.as_deref()).await {
-            if let Some(b64) = intro["response_audio_b64"].as_str() {
+        if let Ok(r) = call_s2s_intro(backend_str).await {
+            if let Some(b64) = r["response_audio_b64"].as_str() {
+                let _ = play_wav_b64(b64, Arc::clone(&cancel)).await;
+            }
+        }
+    } else if backend_changed {
+        if let Ok(r) = call_s2s_backend_changed(backend_str).await {
+            if let Some(b64) = r["response_audio_b64"].as_str() {
                 let _ = play_wav_b64(b64, Arc::clone(&cancel)).await;
             }
         }
@@ -249,7 +269,15 @@ async fn call_s2s(audio_b64: &str, backend: Option<&str>) -> Result<serde_json::
         .context("Invalid JSON response from s2s_service")?)
 }
 
-async fn call_s2s_intro(backend: Option<&str>) -> Result<serde_json::Value> {
+async fn call_s2s_intro(backend: &str) -> Result<serde_json::Value> {
+    call_s2s_tts_event("intro", backend).await
+}
+
+async fn call_s2s_backend_changed(backend: &str) -> Result<serde_json::Value> {
+    call_s2s_tts_event("backend_changed", backend).await
+}
+
+async fn call_s2s_tts_event(event: &str, backend: &str) -> Result<serde_json::Value> {
     let stream = UnixStream::connect(S2S_SOCKET)
         .await
         .context("Cannot reach /tmp/s2s.sock — is s2s_service.py running?")?;
@@ -257,8 +285,8 @@ async fn call_s2s_intro(backend: Option<&str>) -> Result<serde_json::Value> {
     let (reader, mut writer) = stream.into_split();
 
     let payload = serde_json::json!({
-        "event":   "intro",
-        "backend": backend.unwrap_or("anythingllm"),
+        "event":   event,
+        "backend": backend,
     });
     let mut bytes = serde_json::to_vec(&payload)?;
     bytes.push(b'\n');
@@ -270,7 +298,7 @@ async fn call_s2s_intro(backend: Option<&str>) -> Result<serde_json::Value> {
     buf_reader.read_line(&mut line).await?;
 
     Ok(serde_json::from_str(line.trim())
-        .context("Invalid JSON response from s2s_service (intro)")?)
+        .context("Invalid JSON response from s2s_service")?)
 }
 
 // ---------------------------------------------------------------------------

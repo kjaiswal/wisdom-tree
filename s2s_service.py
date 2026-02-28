@@ -323,6 +323,19 @@ async def _handle_client(
                     log.error("Intro TTS error: %s", exc)
                     response = {"error": str(exc)}
 
+            elif event == "backend_changed":
+                backend = req.get("backend", "anythingllm")
+                if backend == "gemini":
+                    text = "Switched to Google Gemini for reasoning."
+                else:
+                    text = "Switched to your local reasoning engine."
+                try:
+                    audio = await loop.run_in_executor(None, service._synthesize, text)
+                    response = {"response_audio_b64": _b64(audio)}
+                except Exception as exc:
+                    log.error("Backend changed TTS error: %s", exc)
+                    response = {"error": str(exc)}
+
             elif event == "process_audio":
                 try:
                     response = await loop.run_in_executor(None, service.process_request, req)
