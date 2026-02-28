@@ -23,6 +23,7 @@ import io
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 import time
@@ -239,6 +240,9 @@ class S2SService:
             lat["llm"] = int((time.perf_counter() - t0) * 1000)
             log.info("LLM (%.0f ms): %r", lat["llm"], response_text[:80])
 
+            response_text = _clean_for_tts(response_text)
+            log.info("Cleaned for TTS: %r", response_text[:80])
+
             # TTS
             t0 = time.perf_counter()
             try:
@@ -436,6 +440,38 @@ def _strip_thinking(text: str) -> str:
     idx = text.find(marker)
     if idx != -1:
         return text[idx + len(marker):].strip()
+    return text.strip()
+
+
+def _clean_for_tts(text: str) -> str:
+    """Remove markdown and special characters that sound odd when spoken aloud."""
+    # Code fences and inline code
+    text = re.sub(r'```[\s\S]*?```', '', text)
+    text = re.sub(r'`[^`]*`', '', text)
+    # Markdown links — keep display text, drop URL
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # Bold / italic / strikethrough markers
+    text = re.sub(r'\*{1,3}|_{1,3}|~~', '', text)
+    # Headers
+    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+    # Blockquotes
+    text = re.sub(r'^>\s*', '', text, flags=re.MULTILINE)
+    # Bullet points
+    text = re.sub(r'^\s*[-*+•]\s+', '', text, flags=re.MULTILINE)
+    # Numbered lists
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+    # Horizontal rules
+    text = re.sub(r'^[-*_]{3,}\s*$', '', text, flags=re.MULTILINE)
+    # Table pipes
+    text = re.sub(r'\|', ' ', text)
+    # Remaining chars that read weirdly aloud
+    text = re.sub(r'[#^{}\[\]\\<>]', '', text)
+    # Emojis and other non-ASCII symbol blocks
+    text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+    text = re.sub(r'[\u2600-\u27BF]', '', text)
+    # Collapse newlines and extra spaces
+    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r' {2,}', ' ', text)
     return text.strip()
 
 
