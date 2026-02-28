@@ -102,8 +102,8 @@ until [[ -S /tmp/s2s.sock ]]; do
         _err "s2s_service.py exited unexpectedly — check logs above"
         exit 1
     fi
-    if [[ $WAITED -ge 120 ]]; then
-        _err "s2s_service.py did not become ready within 120 s"
+    if [[ $WAITED -ge 300 ]]; then
+        _err "s2s_service.py did not become ready within 300 s"
         exit 1
     fi
 done
