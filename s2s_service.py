@@ -183,9 +183,23 @@ class S2SService:
 
     # ── Request handling ─────────────────────────────────────────────────────
 
+    def _llm_response_gemini(self, transcript: str) -> str:
+        import subprocess
+        prompt = f"{SYSTEM_PROMPT}\n\nUser: {transcript}\nAssistant:"
+        result = subprocess.run(
+            ["gemini", "-p", prompt],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"gemini CLI error: {result.stderr.strip()}")
+        return result.stdout.strip()
+
     def process_request(self, req: dict) -> dict:
         t_total = time.perf_counter()
         lat: dict[str, int] = {}
+        backend = req.get("backend", "anythingllm")
 
         # Decode audio to temp file
         wav_bytes = base64.b64decode(req.get("audio_b64", ""))
@@ -208,9 +222,13 @@ class S2SService:
                 }
 
             # LLM
+            log.info("LLM backend: %s", backend)
             t0 = time.perf_counter()
             try:
-                response_text = self._llm_response(transcript)
+                if backend == "gemini":
+                    response_text = self._llm_response_gemini(transcript)
+                else:
+                    response_text = self._llm_response(transcript)
             except Exception as exc:
                 log.error("LLM error: %s", exc)
                 audio = self._synthesize("My brain seems to be offline.")

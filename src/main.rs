@@ -55,6 +55,8 @@ struct WakeWordEvent {
     /// First ~480 ms of audio captured immediately after detection.
     /// Prevents missing words spoken before capture.py opens the mic.
     preroll_b64: Option<String>,
+    /// Which LLM backend to use ("anythingllm" or "gemini").
+    backend: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -173,5 +175,5 @@ async fn handle_event(event: WakeWordEvent, state: Arc<Mutex<AssistantState>>, c
     }
 
     cancel.store(false, Ordering::Relaxed);
-    tokio::spawn(pipeline::run_pipeline(state, event.preroll_b64, cancel));
+    tokio::spawn(pipeline::run_pipeline(state, event.preroll_b64, event.backend, cancel));
 }

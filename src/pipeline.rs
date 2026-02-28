@@ -27,7 +27,7 @@ const CHIME_SAMPLE_RATE: u32 = 44_100;
 // Public entry point — called from handle_event in main.rs
 // ---------------------------------------------------------------------------
 
-pub async fn run_pipeline(state: Arc<Mutex<AssistantState>>, preroll_b64: Option<String>, cancel: Arc<AtomicBool>) {
+pub async fn run_pipeline(state: Arc<Mutex<AssistantState>>, preroll_b64: Option<String>, backend: Option<String>, cancel: Arc<AtomicBool>) {
     // ── WAKE ─────────────────────────────────────────────────────────────────
     println!("{}", "🎯 [WAKE]    Button pressed!".yellow().bold());
     set_state(&state, AssistantState::Listening).await;
@@ -110,7 +110,7 @@ pub async fn run_pipeline(state: Arc<Mutex<AssistantState>>, preroll_b64: Option
     let cancel_for_hold = Arc::clone(&cancel);
     let hold_thread = std::thread::spawn(move || play_hold_music(thinking_flag, cancel_for_hold));
 
-    let result = tokio::time::timeout(Duration::from_secs(90), call_s2s(&audio_b64)).await;
+    let result = tokio::time::timeout(Duration::from_secs(90), call_s2s(&audio_b64, backend.as_deref())).await;
 
     // Stop hold music before playing the response.
     thinking.store(false, Ordering::Relaxed);
@@ -196,7 +196,7 @@ async fn run_capture(preroll_b64: Option<&str>) -> Result<String> {
 // Unix socket: /tmp/s2s.sock
 // ---------------------------------------------------------------------------
 
-async fn call_s2s(audio_b64: &str) -> Result<serde_json::Value> {
+async fn call_s2s(audio_b64: &str, backend: Option<&str>) -> Result<serde_json::Value> {
     let stream = UnixStream::connect(S2S_SOCKET)
         .await
         .context("Cannot reach /tmp/s2s.sock — is s2s_service.py running?")?;
@@ -204,8 +204,9 @@ async fn call_s2s(audio_b64: &str) -> Result<serde_json::Value> {
     let (reader, mut writer) = stream.into_split();
 
     let payload = serde_json::json!({
-        "event":    "process_audio",
+        "event":     "process_audio",
         "audio_b64": audio_b64,
+        "backend":   backend.unwrap_or("anythingllm"),
     });
     let mut bytes = serde_json::to_vec(&payload)?;
     bytes.push(b'\n');

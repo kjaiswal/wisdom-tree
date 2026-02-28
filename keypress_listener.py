@@ -49,6 +49,8 @@ _NS_SYSDEFINED_TYPE     = 14      # NSEventTypeSystemDefined
 # Regular key constants
 _KEYPAD_PLUS_KEYCODE    = 69      # kVK_ANSI_KeypadPlus (Dell / extended keyboard)
 _EQUAL_KEYCODE          = 24      # kVK_ANSI_Equal — Shift+= gives '+' on Apple keyboard
+_MINUS_KEYCODE          = 27      # kVK_ANSI_Minus — '-' on Apple keyboard
+_KEYPAD_MINUS_KEYCODE   = 78      # kVK_ANSI_KeypadMinus — '-' on Dell numpad
 
 # ---------------------------------------------------------------------------
 # Socket state (accessed from the tap callback thread and main thread)
@@ -90,7 +92,7 @@ def _drop_socket() -> None:
 # Send detection event
 # ---------------------------------------------------------------------------
 
-def _send_detection() -> None:
+def _send_detection(backend: str = "anythingllm") -> None:
     global _last_sent
     now = time.time()
     if now - _last_sent < COOLDOWN_S:
@@ -104,6 +106,7 @@ def _send_detection() -> None:
         "score":       1.0,
         "timestamp":   int(now * 1000),
         "preroll_b64": None,
+        "backend":     backend,
     }) + "\n").encode()
 
     # Try up to twice (once with existing socket, once after reconnect).
@@ -157,6 +160,9 @@ def _event_callback(proxy, event_type, event, _refcon):
         shift   = bool(flags & Quartz.kCGEventFlagMaskShift)
         if keycode == _KEYPAD_PLUS_KEYCODE or (keycode == _EQUAL_KEYCODE and shift):
             threading.Thread(target=_send_detection, daemon=True).start()
+            return None   # ← consume
+        if keycode in (_KEYPAD_MINUS_KEYCODE, _MINUS_KEYCODE):
+            threading.Thread(target=lambda: _send_detection("gemini"), daemon=True).start()
             return None   # ← consume
 
     return event
@@ -212,6 +218,8 @@ def _run_pynput_fallback() -> None:
             _send_detection()
         elif hasattr(key, 'vk') and key.vk in (_KEYPAD_PLUS_KEYCODE, _EQUAL_KEYCODE):
             _send_detection()
+        elif hasattr(key, 'vk') and key.vk in (_KEYPAD_MINUS_KEYCODE, _MINUS_KEYCODE):
+            _send_detection("gemini")
 
     with keyboard.Listener(on_press=on_press) as listener:
         listener.join()
