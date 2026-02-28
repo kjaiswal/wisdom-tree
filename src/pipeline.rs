@@ -65,15 +65,11 @@ pub async fn run_pipeline(
     { *last_interaction.lock().await = Some(std::time::Instant::now()); }
     { *last_backend.lock().await = Some(backend_str.to_string()); }
 
-    // ── RECORD ───────────────────────────────────────────────────────────────
-    // Spawn capture.py immediately in the background so Python's startup
-    // (importing torch, loading VAD model, opening mic) runs in parallel
-    // with the confirmation sound. By the time the user hears the tone and
-    // starts speaking, the mic is already open.
-    let pr = preroll_b64.clone();
-    let capture_task = tokio::spawn(async move { run_capture(pr.as_deref()).await });
-
-    // Play appropriate announcement while capture.py is loading.
+    // ── ANNOUNCEMENTS ─────────────────────────────────────────────────────────
+    // Play intro or backend-change audio BEFORE opening the mic. This prevents
+    // capture.py from timing out or recording silence while the announcement
+    // plays. For normal (no announcement) activations, capture.py is still
+    // spawned early to hide its ~500 ms startup behind the confirm chime.
     if needs_intro {
         if let Ok(r) = call_s2s_intro(backend_str).await {
             if let Some(b64) = r["response_audio_b64"].as_str() {
@@ -87,6 +83,12 @@ pub async fn run_pipeline(
             }
         }
     }
+
+    // ── RECORD ───────────────────────────────────────────────────────────────
+    // Spawn capture.py in the background so its startup runs in parallel
+    // with the confirmation chime.
+    let pr = preroll_b64.clone();
+    let capture_task = tokio::spawn(async move { run_capture(pr.as_deref()).await });
 
     // Play the "ready to speak" confirmation sound (≈700 ms).
     // User should speak AFTER this tone finishes.
