@@ -27,10 +27,29 @@ const CHIME_SAMPLE_RATE: u32 = 44_100;
 // Public entry point — called from handle_event in main.rs
 // ---------------------------------------------------------------------------
 
-pub async fn run_pipeline(state: Arc<Mutex<AssistantState>>, preroll_b64: Option<String>, backend: Option<String>, cancel: Arc<AtomicBool>) {
+pub async fn run_pipeline(
+    state: Arc<Mutex<AssistantState>>,
+    preroll_b64: Option<String>,
+    backend: Option<String>,
+    cancel: Arc<AtomicBool>,
+    last_interaction: Arc<tokio::sync::Mutex<Option<std::time::Instant>>>,
+) {
     // ── WAKE ─────────────────────────────────────────────────────────────────
     println!("{}", "🎯 [WAKE]    Button pressed!".yellow().bold());
     set_state(&state, AssistantState::Listening).await;
+
+    // Check whether this is a fresh session (no interaction in the last 5 min).
+    let needs_intro = {
+        let guard = last_interaction.lock().await;
+        match *guard {
+            None => true,
+            Some(t) => t.elapsed() > Duration::from_secs(300),
+        }
+    };
+    {
+        let mut guard = last_interaction.lock().await;
+        *guard = Some(std::time::Instant::now());
+    }
 
     // ── RECORD ───────────────────────────────────────────────────────────────
     // Spawn capture.py immediately in the background so Python's startup
@@ -39,6 +58,15 @@ pub async fn run_pipeline(state: Arc<Mutex<AssistantState>>, preroll_b64: Option
     // starts speaking, the mic is already open.
     let pr = preroll_b64.clone();
     let capture_task = tokio::spawn(async move { run_capture(pr.as_deref()).await });
+
+    // If this is a new session, play an intro while capture.py is loading.
+    if needs_intro {
+        if let Ok(intro) = call_s2s_intro(backend.as_deref()).await {
+            if let Some(b64) = intro["response_audio_b64"].as_str() {
+                let _ = play_wav_b64(b64, Arc::clone(&cancel)).await;
+            }
+        }
+    }
 
     // Play the "ready to speak" confirmation sound (≈700 ms).
     // User should speak AFTER this tone finishes.
@@ -219,6 +247,30 @@ async fn call_s2s(audio_b64: &str, backend: Option<&str>) -> Result<serde_json::
 
     Ok(serde_json::from_str(line.trim())
         .context("Invalid JSON response from s2s_service")?)
+}
+
+async fn call_s2s_intro(backend: Option<&str>) -> Result<serde_json::Value> {
+    let stream = UnixStream::connect(S2S_SOCKET)
+        .await
+        .context("Cannot reach /tmp/s2s.sock — is s2s_service.py running?")?;
+
+    let (reader, mut writer) = stream.into_split();
+
+    let payload = serde_json::json!({
+        "event":   "intro",
+        "backend": backend.unwrap_or("anythingllm"),
+    });
+    let mut bytes = serde_json::to_vec(&payload)?;
+    bytes.push(b'\n');
+    writer.write_all(&bytes).await?;
+    writer.flush().await?;
+
+    let mut buf_reader = BufReader::new(reader);
+    let mut line = String::new();
+    buf_reader.read_line(&mut line).await?;
+
+    Ok(serde_json::from_str(line.trim())
+        .context("Invalid JSON response from s2s_service (intro)")?)
 }
 
 // ---------------------------------------------------------------------------

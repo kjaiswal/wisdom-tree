@@ -85,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state: Arc<Mutex<AssistantState>> = Arc::new(Mutex::new(AssistantState::Idle));
     let cancel: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    let last_interaction: Arc<Mutex<Option<std::time::Instant>>> = Arc::new(Mutex::new(None));
 
     // Print initial state
     use colored::Colorize;
@@ -98,8 +99,9 @@ async fn main() -> anyhow::Result<()> {
                         info!("Sidecar connected");
                         let state = Arc::clone(&state);
                         let cancel = Arc::clone(&cancel);
+                        let last_interaction = Arc::clone(&last_interaction);
                         tokio::spawn(async move {
-                            handle_connection(stream, state, cancel).await;
+                            handle_connection(stream, state, cancel, last_interaction).await;
                         });
                     }
                     Err(e) => error!("Accept error: {e}"),
@@ -121,14 +123,14 @@ async fn main() -> anyhow::Result<()> {
 // Per-connection reader
 // ---------------------------------------------------------------------------
 
-async fn handle_connection(stream: UnixStream, state: Arc<Mutex<AssistantState>>, cancel: Arc<AtomicBool>) {
+async fn handle_connection(stream: UnixStream, state: Arc<Mutex<AssistantState>>, cancel: Arc<AtomicBool>, last_interaction: Arc<Mutex<Option<std::time::Instant>>>) {
     let mut lines = BufReader::new(stream).lines();
     loop {
         match lines.next_line().await {
             Ok(Some(line)) => {
                 debug!("Raw: {line}");
                 match serde_json::from_str::<WakeWordEvent>(&line) {
-                    Ok(ev)  => handle_event(ev, Arc::clone(&state), Arc::clone(&cancel)).await,
+                    Ok(ev)  => handle_event(ev, Arc::clone(&state), Arc::clone(&cancel), Arc::clone(&last_interaction)).await,
                     Err(e)  => warn!("Parse error: {e} — raw: {line:?}"),
                 }
             }
@@ -142,7 +144,7 @@ async fn handle_connection(stream: UnixStream, state: Arc<Mutex<AssistantState>>
 // State machine gate — only starts a pipeline run when Idle
 // ---------------------------------------------------------------------------
 
-async fn handle_event(event: WakeWordEvent, state: Arc<Mutex<AssistantState>>, cancel: Arc<AtomicBool>) {
+async fn handle_event(event: WakeWordEvent, state: Arc<Mutex<AssistantState>>, cancel: Arc<AtomicBool>, last_interaction: Arc<Mutex<Option<std::time::Instant>>>) {
     use colored::Colorize;
 
     if event.event != "detected" {
@@ -175,5 +177,5 @@ async fn handle_event(event: WakeWordEvent, state: Arc<Mutex<AssistantState>>, c
     }
 
     cancel.store(false, Ordering::Relaxed);
-    tokio::spawn(pipeline::run_pipeline(state, event.preroll_b64, event.backend, cancel));
+    tokio::spawn(pipeline::run_pipeline(state, event.preroll_b64, event.backend, cancel, last_interaction));
 }

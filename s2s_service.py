@@ -308,15 +308,31 @@ async def _handle_client(
                 log.warning("Bad JSON: %s", exc)
                 continue
 
-            if req.get("event") != "process_audio":
-                log.warning("Unknown event: %s", req.get("event"))
-                continue
+            event = req.get("event")
 
-            try:
-                response = await loop.run_in_executor(None, service.process_request, req)
-            except Exception as exc:
-                log.error("Pipeline error: %s", exc, exc_info=True)
-                response = {"error": str(exc)}
+            if event == "intro":
+                backend = req.get("backend", "anythingllm")
+                if backend == "gemini":
+                    text = "Hi, I'm Wisdom Tree, your local AI assistant. You are using Google Gemini for reasoning."
+                else:
+                    text = "Hi, I'm Wisdom Tree, your local AI assistant. You are using your local reasoning engine."
+                try:
+                    audio = await loop.run_in_executor(None, service._synthesize, text)
+                    response = {"response_audio_b64": _b64(audio)}
+                except Exception as exc:
+                    log.error("Intro TTS error: %s", exc)
+                    response = {"error": str(exc)}
+
+            elif event == "process_audio":
+                try:
+                    response = await loop.run_in_executor(None, service.process_request, req)
+                except Exception as exc:
+                    log.error("Pipeline error: %s", exc, exc_info=True)
+                    response = {"error": str(exc)}
+
+            else:
+                log.warning("Unknown event: %s", event)
+                continue
 
             writer.write((json.dumps(response) + "\n").encode())
             await writer.drain()
